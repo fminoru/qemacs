@@ -30,6 +30,25 @@ endif
 
 include $(DEPTH)/config.mak
 
+# Install location overrides (e.g. make install PREFIX=$HOME/.local)
+ifdef PREFIX
+  prefix := $(PREFIX)
+  datadir := $(prefix)/share
+  mandir := $(prefix)/share/man
+endif
+DESTDIR ?=
+
+ifdef CONFIG_DARWIN
+  INSTALL_BIN = $(INSTALL) -m 755
+else
+  INSTALL_BIN = $(INSTALL) -m 755 -s
+endif
+INSTALL_DATA = $(INSTALL) -m 644
+INSTALL_DIR  = $(INSTALL) -d -m 755
+
+bindir = $(prefix)/bin
+qedir  = $(datadir)/qe
+
 ifeq (,$(V)$(VERBOSE))
     echo := @echo
     cmd  := @
@@ -609,38 +628,43 @@ distclean: clean
 	rm -rf config.h config.mak
 
 install: $(TARGETS) qe.1
-	$(INSTALL) -m 755 -d $(DESTDIR)$(prefix)/bin
-	$(INSTALL) -m 755 -d $(DESTDIR)$(mandir)/man1
-	$(INSTALL) -m 755 -d $(DESTDIR)$(datadir)/qe
+	$(INSTALL_DIR) $(DESTDIR)$(bindir)
+	$(INSTALL_DIR) $(DESTDIR)$(mandir)/man1
+	$(INSTALL_DIR) $(DESTDIR)$(qedir)
 ifdef CONFIG_X11
-	$(INSTALL) -m 755 -s xqe$(EXE) $(DESTDIR)$(prefix)/bin/qemacs$(EXE)
+  ifdef CONFIG_DARWIN
+	$(INSTALL_BIN) qe$(EXE) $(DESTDIR)$(bindir)/qemacs$(EXE)
+	$(INSTALL_BIN) xqe$(EXE) $(DESTDIR)$(bindir)/xqe$(EXE)
+  else
+	$(INSTALL_BIN) xqe$(EXE) $(DESTDIR)$(bindir)/qemacs$(EXE)
+  endif
 else
   ifdef CONFIG_TINY_ONLY
-	$(INSTALL) -m 755 -s tqe$(EXE) $(DESTDIR)$(prefix)/bin/qemacs$(EXE)
+	$(INSTALL_BIN) tqe$(EXE) $(DESTDIR)$(bindir)/qemacs$(EXE)
   else
-	$(INSTALL) -m 755 -s qe$(EXE) $(DESTDIR)$(prefix)/bin/qemacs$(EXE)
+	$(INSTALL_BIN) qe$(EXE) $(DESTDIR)$(bindir)/qemacs$(EXE)
   endif
 endif
-	ln -sf qemacs$(EXE) $(DESTDIR)$(prefix)/bin/qe$(EXE)
+	ln -sf qemacs$(EXE) $(DESTDIR)$(bindir)/qe$(EXE)
 ifdef CONFIG_FFMPEG
-	ln -sf qemacs$(EXE) $(DESTDIR)$(prefix)/bin/ffplay$(EXE)
+	ln -sf qemacs$(EXE) $(DESTDIR)$(bindir)/ffplay$(EXE)
 endif
-	$(INSTALL) -m 644 kmaps ligatures $(DESTDIR)$(datadir)/qe
-	$(INSTALL) -m 644 qe.1 $(DESTDIR)$(mandir)/man1
+	$(INSTALL_DATA) kmaps ligatures $(DESTDIR)$(qedir)
+	$(INSTALL_DATA) qe.1 $(DESTDIR)$(mandir)/man1
 ifdef CONFIG_HTML
-	$(INSTALL) -m 755 -s html2png$(EXE) $(DESTDIR)$(prefix)/bin
+	$(INSTALL_BIN) html2png$(EXE) $(DESTDIR)$(bindir)
 endif
 
 uninstall:
-	rm -f $(DESTDIR)$(prefix)/bin/qemacs$(EXE)   \
-	      $(DESTDIR)$(prefix)/bin/qe$(EXE)       \
-	      $(DESTDIR)$(prefix)/bin/tqe$(EXE)      \
-	      $(DESTDIR)$(prefix)/bin/xqe$(EXE)      \
-	      $(DESTDIR)$(prefix)/bin/ffplay$(EXE)   \
-	      $(DESTDIR)$(mandir)/man1/qe.1          \
-	      $(DESTDIR)$(datadir)/qe/kmaps          \
-	      $(DESTDIR)$(datadir)/qe/ligatures      \
-	      $(DESTDIR)$(prefix)/bin/html2png$(EXE)
+	rm -f $(DESTDIR)$(bindir)/qemacs$(EXE)   \
+	      $(DESTDIR)$(bindir)/qe$(EXE)       \
+	      $(DESTDIR)$(bindir)/tqe$(EXE)      \
+	      $(DESTDIR)$(bindir)/xqe$(EXE)      \
+	      $(DESTDIR)$(bindir)/ffplay$(EXE)   \
+	      $(DESTDIR)$(mandir)/man1/qe.1      \
+	      $(DESTDIR)$(qedir)/kmaps          \
+	      $(DESTDIR)$(qedir)/ligatures      \
+	      $(DESTDIR)$(bindir)/html2png$(EXE)
 
 rebuild:
 	./configure && $(MAKE) clean all
@@ -670,6 +694,7 @@ help:
 	@echo "  tqe: build the tiny version tqe"
 	@echo "  debug: build an unoptimized debug version of qe named qe_debug"
 	@echo "  xxx_debug: build an unoptimized debug version of the xxx target"
+	@echo "  install: install qemacs in $(prefix) (override with PREFIX=... DESTDIR=...)"
 	@echo "flags:"
 	@echo "  BUILD_ALL=1  rebuild some distribution files: ligatures kmaps charsets"
 	@echo "  VERBOSE=1    show complete commands instead of abbreviated ones"

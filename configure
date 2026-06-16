@@ -91,6 +91,7 @@ kmaps="yes"
 modes="yes"
 bidir="yes"
 exe=""
+homebrew_prefix=""
 
 # OS specific
 targetos=`uname -s`
@@ -160,6 +161,20 @@ case $targetos in
     strip_args="-x -S"
     cc="clang"
     host_cc="clang"
+    if test -x "/opt/homebrew/bin/brew" ; then
+        homebrew_prefix="/opt/homebrew"
+    elif test -x "/usr/local/bin/brew" ; then
+        homebrew_prefix="/usr/local"
+    fi
+    if test -n "$homebrew_prefix" ; then
+        brew_prefix=`"$homebrew_prefix/bin/brew" --prefix 2>/dev/null`
+        if test -n "$brew_prefix" ; then
+            homebrew_prefix="$brew_prefix"
+        fi
+        prefix="$homebrew_prefix"
+        CFLAGS="-I$homebrew_prefix/include"
+        LDFLAGS="-L$homebrew_prefix/lib"
+    fi
     ;;
   Haiku)
     prefix="`finddir B_COMMON_DIRECTORY`"
@@ -200,11 +215,16 @@ if test -d "./ffmpeg" ; then
     ffmpeg_srcdir="./ffmpeg"
 fi
 
-if test -f "/usr/include/png.h" ; then
-    png="yes"
-fi
+for png_incdir in /usr/include \
+                  "$homebrew_prefix/include" /opt/homebrew/include \
+                  /usr/local/include ; do
+    if test -n "$png_incdir" -a -f "$png_incdir/png.h" ; then
+        png="yes"
+        break
+    fi
+done
 
-for x11path in /usr /opt/X11 /usr/X11R6; do
+for x11path in /opt/X11 "$homebrew_prefix" /usr /usr/X11R6 ; do
     if test -f "$x11path/include/X11/Xlib.h" ; then
         x11="yes"
         x11_libdir="$x11path/lib"
@@ -384,7 +404,11 @@ if test -z "$datadir"; then
     datadir="${prefix}/share"
 fi
 if test -z "$mandir"; then
-    mandir="${prefix}/man"
+    if test "$darwin" = "yes" ; then
+        mandir="${prefix}/share/man"
+    else
+        mandir="${prefix}/man"
+    fi
 fi
 
 # Checking for CFLAGS
