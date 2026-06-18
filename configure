@@ -25,6 +25,7 @@ TMPMAK="${TMPDIR1}/qemacs-conf-${RANDOM}-$$-${RANDOM}.mak"
 
 # default parameters
 prefix="/usr/local"
+prefix_explicit="no"
 cross_prefix=""
 
 cc="cc"
@@ -290,6 +291,7 @@ for opt do
     case "$opt" in
       --prefix=*)
         prefix=`echo $opt | cut -d '=' -f 2`
+        prefix_explicit="yes"
         ;;
       --datadir=*)
         datadir=`echo $opt | cut -d '=' -f 2`
@@ -404,10 +406,16 @@ if test -z "$datadir"; then
     datadir="${prefix}/share"
 fi
 if test -z "$mandir"; then
-    if test "$darwin" = "yes" ; then
+    mandir="${prefix}/share/man"
+fi
+
+# Use a user-writable prefix when the default is not writable
+if test "$prefix_explicit" = "no" && test -n "$HOME"; then
+    if test ! -w "$datadir" 2>/dev/null && test ! -w "$(dirname "$datadir")" 2>/dev/null; then
+        prefix="$HOME/.local"
+        datadir="${prefix}/share"
         mandir="${prefix}/share/man"
-    else
-        mandir="${prefix}/man"
+        echo "Note: default install prefix is not writable, using $prefix"
     fi
 fi
 

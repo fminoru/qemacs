@@ -35,6 +35,16 @@ ifdef PREFIX
   prefix := $(PREFIX)
   datadir := $(prefix)/share
   mandir := $(prefix)/share/man
+else
+  ifeq ($(DESTDIR),)
+    _install_writable := $(shell test -w '$(datadir)' 2>/dev/null || test -w '$$(dirname "$(datadir)")' 2>/dev/null && echo yes)
+    ifeq ($(_install_writable),)
+      prefix := $(HOME)/.local
+      datadir := $(HOME)/.local/share
+      mandir := $(HOME)/.local/share/man
+      _install_prefix_fallback := yes
+    endif
+  endif
 endif
 DESTDIR ?=
 
@@ -628,6 +638,10 @@ distclean: clean
 	rm -rf config.h config.mak
 
 install: $(TARGETS) qe.1
+ifneq ($(_install_prefix_fallback),)
+	@echo "Note: default install prefix is not writable, using $(prefix)"
+endif
+	@echo "Installing to $(DESTDIR)$(prefix)"
 	$(INSTALL_DIR) $(DESTDIR)$(bindir)
 	$(INSTALL_DIR) $(DESTDIR)$(mandir)/man1
 	$(INSTALL_DIR) $(DESTDIR)$(qedir)
