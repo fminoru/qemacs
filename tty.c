@@ -185,6 +185,7 @@ typedef struct TTYState {
     char32_t comb_cache[COMB_CACHE_SIZE];
     char *clipboard;
     size_t clipboard_size;
+    int clipboard_waiting;
     int got_focus;
 } TTYState;
 
@@ -228,8 +229,8 @@ static void tty_term_set_raw(QEditScreen *s) {
         /* enable mouse reporting using SGR */
         TTY_FPRINTF(s->STDOUT, "\033[?%d;1006h", tty_mouse == 1 ? 1002 : 1003);
     }
-    if (tty_mouse > 0 || tty_clipboard > 0) {
-        /* enable focus reporting */
+    if (tty_mouse > 0) {
+        /* enable focus reporting (mouse focus filter) */
         TTY_FPRINTF(s->STDOUT, "\033[?1004h");
     }
 #endif
@@ -266,7 +267,7 @@ static void tty_term_set_cooked(QEditScreen *s) {
         /* disable mouse reporting using SGR */
         TTY_FPRINTF(s->STDOUT, "\033[?%d;1006l", tty_mouse == 1 ? 1002 : 1003);
     }
-    if (tty_mouse > 0 || tty_clipboard > 0) {
+    if (tty_mouse > 0) {
         /* disable focus reporting */
         TTY_FPRINTF(s->STDOUT, "\033[?1004l");
     }
@@ -788,11 +789,13 @@ static int tty_get_clipboard(QEditScreen *s, int ch)
 
 static int tty_request_clipboard(QEditScreen *s)
 {
+    TTYState *ts = s->priv_data;
+
     if (tty_clipboard == 1) {
         qe_trace_bytes(s->qs, "tty-request-clipboard", -1, EB_TRACE_COMMAND);
+        ts->clipboard_waiting = 1;
         TTY_FPUTS("\033]52;;?\007", s->STDOUT);
         fflush(s->STDOUT);
-        // FIXME: should read tty response with a 100ms timeout
         return 1;
     }
 #ifdef CONFIG_DARWIN
@@ -1202,19 +1205,11 @@ static void tty_read_handler(void *opaque)
             ts->has_meta = 0;
             ts->got_focus = get_clock_ms();
             qe_trace_bytes(qs, "tty-focus-in", -1, EB_TRACE_COMMAND);
-            if (tty_clipboard > 0) {
-                /* request clipboard contents into kill buffer if changed */
-                tty_request_clipboard(s);
-            }
             break;
         case 'O': // FocusOut
             ts->input_state = IS_NORM;
             ts->has_meta = 0;
             qe_trace_bytes(qs, "tty-focus-out", -1, EB_TRACE_COMMAND);
-            if (tty_clipboard > 0) {
-                /* push last kill to clipboard if new */
-                tty_set_clipboard(s);
-            }
             break;
         default:
             /* n2 contains the shift status + 1:
@@ -1347,9 +1342,53 @@ static void tty_read_handler(void *opaque)
             if (tty_clipboard > 0) {
                 tty_get_clipboard(s, ch);
             }
+            ts->clipboard_waiting = 0;
         }
         break;
     }
+}
+
+static void tty_wait_clipboard_response(QEditScreen *s, int timeout_ms)
+{
+    TTYState *ts = s->priv_data;
+    int end_time, fd;
+
+    if (!ts->clipboard_waiting)
+        return;
+    end_time = get_clock_ms() + timeout_ms;
+    fd = fileno(s->STDIN);
+    while (ts->clipboard_waiting && get_clock_ms() < end_time) {
+        fd_set rfds;
+        struct timeval tv;
+        int remaining = end_time - get_clock_ms();
+
+        FD_ZERO(&rfds);
+        FD_SET(fd, &rfds);
+        tv.tv_sec = remaining / 1000;
+        tv.tv_usec = (remaining % 1000) * 1000;
+        if (select(fd + 1, &rfds, NULL, NULL, &tv) <= 0)
+            break;
+        tty_read_handler(s);
+    }
+    ts->clipboard_waiting = 0;
+}
+
+static void tty_dpy_selection_request(QEditScreen *s)
+{
+    if (tty_clipboard <= 0)
+        return;
+    if (tty_request_clipboard(s) <= 0)
+        return;
+    if (tty_clipboard == 1)
+        /* allow time for terminal clipboard permission prompts (e.g. Ghostty) */
+        tty_wait_clipboard_response(s, 3000);
+}
+
+static void tty_dpy_selection_activate(QEditScreen *s)
+{
+    if (tty_clipboard <= 0)
+        return;
+    tty_set_clipboard(s);
 }
 
 static void tty_dpy_fill_rectangle(QEditScreen *s,
@@ -2211,8 +2250,8 @@ static QEDisplay tty_dpy = {
     tty_dpy_text_metrics,
     tty_dpy_draw_text,
     tty_dpy_set_clip,
-    NULL, /* dpy_selection_activate */
-    NULL, /* dpy_selection_request */
+    tty_dpy_selection_activate,
+    tty_dpy_selection_request,
     tty_dpy_invalidate,
     tty_dpy_cursor_at,
     tty_dpy_bmp_alloc,
