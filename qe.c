@@ -11351,6 +11351,8 @@ static void qe_set_user_option(QEmacsState *qs, const char *user)
     if (home_path) {
         pstrcat(qs->res_path, sizeof(qs->res_path), home_path);
         pstrcat(qs->res_path, sizeof(qs->res_path), "/.qe:");
+        pstrcat(qs->res_path, sizeof(qs->res_path), home_path);
+        pstrcat(qs->res_path, sizeof(qs->res_path), "/.local/share/qe:");
     }
 
     pstrcat(qs->res_path, sizeof(qs->res_path),
