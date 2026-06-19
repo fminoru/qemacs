@@ -10473,6 +10473,34 @@ int qe__is_user_input_pending(void)
 
 #endif
 
+#ifdef CONFIG_WIN32
+
+int eb_put_filename(EditBuffer *b, const char *name, qe__unused__ int flags)
+{
+    return eb_puts(b, name);
+}
+
+int file_print_entry(qe__unused__ CompleteState *cp, EditState *s, const char *name)
+{
+    return eb_put_filename(s->b, name, 0);
+}
+
+void do_dired_path(EditState *s, qe__unused__ const char *path)
+{
+    put_error(s, "Dired not supported");
+}
+
+void do_dired(EditState *s, qe__unused__ int argval)
+{
+    put_error(s, "Dired not supported");
+}
+
+void qe_diff_buffer_with_file(EditState *s, qe__unused__ EditBuffer *b)
+{
+    put_error(s, "Diff not supported");
+}
+
+#endif /* CONFIG_WIN32 */
 #ifndef CONFIG_TINY
 
 void window_get_min_size(EditState *s, int *w_ptr, int *h_ptr)

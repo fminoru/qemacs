@@ -28,6 +28,7 @@
 #ifdef CONFIG_WIN32
 #include <winsock.h>
 #include <sys/timeb.h>
+void win32_event_wait(QEmacsState *qs, int delay);
 /* Use a conditional typedef to avoid compilation warning */
 typedef u_int fdesc_t;
 #else
@@ -250,7 +251,7 @@ static void url_block_reset(void)
 #define MAX_DELAY 500  /* milliseconds */
 
 /* block until one event */
-static void url_block(void)
+static void url_block(QEmacsState *qs)
 {
     URLHandler *uh;
     int ret, i, delay;
@@ -258,6 +259,10 @@ static void url_block(void)
     struct timeval tv;
 
     delay = check_timers(MAX_DELAY);
+#ifdef CONFIG_WIN32
+    win32_event_wait(qs, delay);
+    return;
+#endif
 #if 0
     {
         static int count;
@@ -326,7 +331,7 @@ int url_main_loop(int (*init)(void *opaque), void *opaque)
     for (;;) {
         if (url_exit_request)
             break;
-        url_block();
+        url_block(ap->qs);
         if (url_display_request) {
             QEmacsState *qs = ap->qs;
 

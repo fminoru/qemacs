@@ -64,6 +64,7 @@ network="yes"
 atari="no"
 win32="no"
 cygwin="no"
+msys="no"
 darwin="no"
 linux="no"
 freebsd="no"
@@ -149,9 +150,13 @@ case $targetos in
     ;;
   MINGW*)
     mingw="yes"
+    win32="yes"
     ;;
   CYGWIN*)
     cygwin="yes"
+    ;;
+  MSYS*)
+    msys="yes"
     ;;
   Darwin)
     darwin="yes"
@@ -261,6 +266,7 @@ echo "  --prefix=PREFIX          install in PREFIX [$prefix]"
 echo "  --enable-atari           enable atari cross compile"
 echo "  --enable-win32           enable win32 cross compile"
 echo "  --enable-cygwin          compile for cygwin systems"
+echo "  --enable-msys            compile for MSYS2 POSIX terminal"
 echo "  --disable-x11            disable Xwindow support"
 echo "  --disable-xv             disable Xvideo extension support"
 echo "  --disable-xshm           disable XShm extension support"
@@ -365,6 +371,9 @@ for opt do
       --enable-cygwin)
         cygwin="yes"
         ;;
+      --enable-msys)
+        msys="yes"
+        ;;
       --enable-shared | --disable-shared)
         lshared="$value"
         ;;
@@ -442,13 +451,16 @@ if test "$atari" = "yes" ; then
     x11="no"
     mmap="no"
     cygwin="no"
+    msys="no"
     exe=".tos"
     cpu="m68k"
     targetos="MiNT"
 fi
 
 if test "$win32" = "yes" ; then
-    if test "$cygwin" = "yes" ; then
+    if test "$mingw" = "yes" ; then
+        :
+    elif test "$cygwin" = "yes" ; then
         cross_prefix="i686-pc-mingw32-"
         gcc_major="3"
 	CFLAGS="$CFLAGS -I/usr/include/mingw -I/usr/include/w32api"
@@ -464,10 +476,11 @@ if test "$win32" = "yes" ; then
     x11="no"
     mmap="no"
     cygwin="no"
+    msys="no"
     exe=".exe"
 fi
 
-if test "$cygwin" = "yes" ; then
+if test "$cygwin" = "yes" -o "$msys" = "yes" ; then
     doc="no"
     x11="no"
     png="no"
@@ -712,6 +725,11 @@ fi
 if test "$cygwin" = "yes" ; then
   echo "#define CONFIG_CYGWIN 1" >> $TMPH
   echo "CONFIG_CYGWIN=yes" >> $TMPMAK
+fi
+
+if test "$msys" = "yes" ; then
+  echo "#define CONFIG_MSYS 1" >> $TMPH
+  echo "CONFIG_MSYS=yes" >> $TMPMAK
 fi
 
 if test "$darwin" = "yes" ; then

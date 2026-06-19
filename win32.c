@@ -383,7 +383,7 @@ LRESULT CALLBACK qe_wnd_proc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
             saved_hdc = win_ctx.hdc;
             win_ctx.hdc = ps.hdc;
             SelectObject(win_ctx.hdc, win_ctx.font);
-            do_refresh(qs->active_window);
+            do_refresh(win_ctx.qs->active_window);
 
             EndPaint(win_ctx.w, &ps);
             win_ctx.hdc = saved_hdc;
@@ -400,29 +400,71 @@ LRESULT CALLBACK qe_wnd_proc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return 0;
 }
 
+static int pop_event(QEEvent *ev)
+{
+    QEEventQ *e;
+
+    if (first_event == NULL)
+        return 0;
+    e = first_event;
+    *ev = e->ev;
+    first_event = e->next;
+    if (!first_event)
+        last_event = NULL;
+    qe_free(&e);
+    return 1;
+}
+
+static void win32_dispatch_messages(void)
+{
+    MSG msg;
+
+    while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+        if (msg.message == WM_QUIT) {
+            url_exit();
+            break;
+        }
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+}
+
+static void win32_dispatch_events(QEmacsState *qs)
+{
+    QEEvent ev;
+
+    while (pop_event(&ev))
+        qe_handle_event(qs, &ev);
+}
+
+void win32_event_wait(QEmacsState *qs, int delay)
+{
+    win32_dispatch_messages();
+    win32_dispatch_events(qs);
+    if (first_event != NULL)
+        return;
+    if (delay < 0)
+        delay = 0;
+    MsgWaitForMultipleObjects(0, NULL, FALSE, (DWORD)delay, QS_ALLINPUT);
+    win32_dispatch_messages();
+    win32_dispatch_events(qs);
+}
+
 typedef struct QEPollData QEPollData;
 int get_unicode_key(QEditScreen *s, QEPollData *pd, QEEvent *ev)
 {
     MSG msg;
-    QEEventQ *e;
 
     for (;;) {
-        /* check if events queued */
-        if (first_event != NULL) {
-            e = first_event;
-            *ev = e->ev;
-            first_event = e->next;
-            if (!first_event)
-                last_event = NULL;
-            qe_free(&e);
+        if (pop_event(ev))
             break;
-        }
 
-        /* check if message queued */
-        if (GetMessage(&msg, NULL, 0, 0)) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
+        if (GetMessage(&msg, NULL, 0, 0) <= 0) {
+            url_exit();
+            return 0;
         }
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
     }
     return 1;
 }

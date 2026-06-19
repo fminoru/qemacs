@@ -144,7 +144,7 @@ int find_file_next(FindFileState *s, char *filename, int filename_size_max) {
             s->dir = opendir(s->dirpath);
         } else {
             int isdir = 0;
-#ifdef __MINT__ // only glibc defines _DIRENT_HAVE_D_TYPE
+#if defined(__MINT__) || defined(CONFIG_WIN32) || !defined(DT_DIR)
             // Work around missing d_type
             char tmppath[MAX_FILENAME_SIZE];
             makepath(tmppath, sizeof(tmppath), s->dirpath, dirent->d_name);
